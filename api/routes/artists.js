@@ -9,8 +9,8 @@ router.get('/', (req, res, next) => {
 
 router.post('/', (req, res, next) => {
     const artist = {
-        artistName: req.body.artistName,
-        artistlName:req.body.artistlName
+        artistName: req.body.name,
+        artistlName:req.body.lName
     };
     res.status(201).json({
         message:'POST artist',
