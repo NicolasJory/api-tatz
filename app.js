@@ -8,6 +8,7 @@ require('dotenv').config()
 const userRoutes = require('./api/routes/users');
 const artistRoutes = require('./api/routes/artists')
 const publicationsRoutes = require('./api/routes/publications')
+const mediasRoutes = require('./api/routes/medias');
 
 mongoose.connect(
     'mongodb+srv://admin-tatz:'+process.env.MONGO_ATLAS_PW +'@db-tatz.mu9uv.mongodb.net/myFirstDatabase?retryWrites=true&w=majority'
@@ -34,6 +35,7 @@ app.use((req, res, next)=>{
 app.use('/users', userRoutes);
 app.use('/artists', artistRoutes);
 app.use('/publications', publicationsRoutes);
+app.use('/medias',mediasRoutes);
 
 app.use((req, res, next) => {
     const error = new Error('Not found');

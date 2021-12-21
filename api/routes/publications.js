@@ -46,7 +46,7 @@ router.post('/', upload.single('file'), (req, res, next) => {
                 artistId: result.artistId,
                 media:
                   {
-                    mediaId:media._id,
+                    id:media._id,
                     url: media.mediaUrl,
                     publicationId:media.publicationId,
                   },
@@ -71,8 +71,16 @@ router.post('/', upload.single('file'), (req, res, next) => {
       });
 
 router.get('/', (req, res, next) => {
-    Publication.find()
-        .select('-__v')
+    Publication.aggregate([
+            {
+                $lookup: {
+                    from:"media",
+                    localField:"_id",
+                    foreignField: "publicationId",
+                    as: "media"
+                }
+            }
+        ])       
         .exec()
         .then(docs => {
             const response = {
@@ -80,14 +88,21 @@ router.get('/', (req, res, next) => {
                 publications: docs.map(doc =>{
                     return {
                         id: doc._id,
+                        artistId: doc.artistId,
                         title: doc.title,
                         description: doc.description,
-                        mediaUrl: doc.mediaUrl,
-                        request: {
+                        media: doc.media,
+                        request: [{
                             type: "GET",
                             description:'GET_PUBLICATIONS',
                             url: 'http://localhost:3000/publications/'+ doc._id
-                        }
+                        },
+                        {
+                            type: "GET",
+                            description:'GET_PUBLICATION_S_ARTIST',
+                            url: 'http://localhost:3000/artists/'+ doc.artistId
+                        }]
+
                     }
                     
                 })
@@ -102,22 +117,42 @@ router.get('/', (req, res, next) => {
 
 router.get('/:publicationId', (req, res, next) => {
     const id = req.params.publicationId;
-    Publication.findById(id)
-        .select('-__v')
+    Publication.aggregate([
+            {
+                $match : { _id: mongoose.Types.ObjectId(id)}
+            },
+            {
+                $lookup: {
+                    from:"media",
+                    localField:"_id",
+                    foreignField: "publicationId",
+                    as: "media"
+                }
+            }
+        ])    
         .exec()
-        .then(doc => {
-            if (doc) {
+        .then(docs => {
+            //check if res != null, index[0] because aggregate returns an array of json
+            if (docs[0]) {   
                 res.status(200).json({
-                    id: doc._id,
-                    artistId: doc.artistId,
-                    title: doc.name,
-                    description: doc.lName,
-                    mediaUrl: doc.mediaUrl,
-                    request:{
+                    id: docs[0]._id,
+                    title: docs[0].title,
+                    description: docs[0].description,
+                    request: [{
                         type: "GET",
-                        description: "GET_ALL_PUBLICATIONS",
-                        url: "http://localhost:3000/publications"
-                    }
+                        description:'GET_ALL_PUBLICATIONS',
+                        url: 'http://localhost:3000/publications'
+                    },
+                    {
+                        type: "GET",
+                        description:'GET_ALL_ARTISTS',
+                        url: 'http://localhost:3000/artists'
+                    }],
+                    //.map to map on every media (multiple images on one publication)
+                    // No global .map we don't want to get x.media times the publication information (because it's on the same pub)
+                    medias: docs.map(doc =>{
+                        return (doc.media);
+                    })     
                 });
             } else {
                 res.status(404).json({message : "Value not found"});
@@ -132,16 +167,34 @@ router.get('/:publicationId', (req, res, next) => {
 
 router.delete('/:publicationId', (req, res, next) => {
     const id = req.params.publicationId;
-    Publication.remove({ _id: id})
+    Publication.deleteOne({ _id: id})
+        .exec()
+        .catch(err => {
+            res.status(500).json({error: err});
+        });
+    Media.find({publicationId : id})
+        .exec()
+        .then(docs=>{
+            docs.map(doc =>{
+                bucket.file(doc.mediaUrl.slice(44)).delete();
+                console.log(`${doc.mediaUrl} deleted`);
+            })     
+        })
+        .catch(err => {
+            res.status(500).json({error: err});
+        });
+    Media.deleteMany({ publicationId : id})
         .exec()
         .then(result => {
             res.status(200).json({
-                message: "publications deleted"
+                message: "publication deleted"
             });
         })
         .catch(err => {
             res.status(500).json({error: err});
         });
+    
+    
 });
 
 module.exports = router;
